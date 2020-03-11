@@ -96,7 +96,8 @@ let
     name = "crate-${name}-${version}${optionalString (compileMode != "build") "-${compileMode}"}";
     inherit src version meta;
     buildInputs = runtimeDependencies;
-    propagatedBuildInputs = concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies;
+    propagatedBuildInputs = lib.unique
+      (concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
     nativeBuildInputs = [ cargo buildPackages.pkg-config ] ++ buildtimeDependencies;
 
     depsBuildBuild =
@@ -231,7 +232,7 @@ let
     installPhase = ''
       mkdir -p $out/lib
       cargo_links="$(remarshal -if toml -of json Cargo.original.toml | jq -r '.package.links | select(. != null)')"
-      install_crate ${host-triple}
+      install_crate ${host-triple} ${if release then "release" else "debug"}
     '';
   };
 in

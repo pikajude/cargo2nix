@@ -96,12 +96,10 @@ let
     name = "crate-${name}-${version}${optionalString (compileMode != "build") "-${compileMode}"}";
     inherit src version meta;
     buildInputs = runtimeDependencies;
-    propagatedBuildInputs = lib.unique
-      (concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
     nativeBuildInputs = [ cargo buildPackages.pkg-config ] ++ buildtimeDependencies;
 
     depsBuildBuild =
-      let inherit (buildPackages.buildPackages) stdenv jq remarshal;
+      let inherit (buildPackages) stdenv jq remarshal;
       in [ stdenv.cc jq remarshal ];
 
     # Running the default `strip -S` command on Darwin corrupts the

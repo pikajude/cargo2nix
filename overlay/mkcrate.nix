@@ -96,6 +96,8 @@ let
     name = "crate-${name}-${version}${optionalString (compileMode != "build") "-${compileMode}"}";
     inherit src version meta;
     buildInputs = runtimeDependencies;
+    propagatedBuildInputs = lib.unique
+      (concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
     nativeBuildInputs = [ cargo buildPackages.pkg-config ] ++ buildtimeDependencies;
 
     depsBuildBuild =
@@ -204,6 +206,13 @@ let
       buildLinkFlags=(`makeExternCrateFlags $buildDependencies`)
       linkExternCrateToDeps `realpath deps` $dependencies $devDependencies
       linkExternCrateToDeps `realpath build_deps` $buildDependencies
+
+      f1=`pwd`/build-ldflags
+      f2=`pwd`/ldflags
+      echo "$NIX_BUILD_LDFLAGS" > "$f1"
+      export NIX_BUILD_LDFLAGS="@$f1"
+      echo "$NIX_LDFLAGS" > "$f2"
+      export NIX_LDFLAGS="@$f2"
 
       export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
       export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"

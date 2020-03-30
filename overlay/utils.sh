@@ -25,7 +25,7 @@ makeExternCrateFlags() {
         elif [ -f "$crate/lib/lib${crate_name}.dylib" ]; then
             echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.dylib"
         else
-            echo do not know how to find $extern_name \($crate_name\) >&2
+            echo >&2 "do not know how to find $extern_name ($crate_name)"
             exit 1
         fi
         echo "-L" dependency=$crate/lib/deps
@@ -101,7 +101,11 @@ dumpDepInfo() {
             warning)
             ;;
             rustc-link-search)
-                echo "-L" `printf '%q' $val` >>$link_flags
+                if [[ "$val" = *"$NIX_BUILD_TOP"* ]]; then
+                    echo >&2 "not propagating linker arg '$val'"
+                else
+                    echo "-L" `printf '%q' $val` >>$link_flags
+                fi
                 ;;
             *)
                 if [ -e "$val" ]; then

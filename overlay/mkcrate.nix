@@ -18,12 +18,14 @@
   dependencies ? { },
   devDependencies ? { },
   buildDependencies ? { },
-  compileMode ? "build",
   profile,
   meta ? { },
   rustcflags ? [ ],
   rustcBuildFlags ? [ ],
   NIX_DEBUG ? 0,
+  doCheck ? false,
+  doBench ? doCheck,
+  extraCargoArguments ? [ ],
 }:
 with builtins; with lib;
 let
@@ -62,39 +64,52 @@ let
     flatten
       (sort (a: b: elemAt a 0 < elemAt b 0)
         (mapAttrsToList (name: value: [ name "${value}" ]) deps));
-  buildCmd =
+  commonCargoArgs =
     let
       hasDefaultFeature = elem "default" features;
       featuresWithoutDefault = if hasDefaultFeature
         then filter (feature: feature != "default") features
         else features;
-      buildMode = {
-        "test" = "--tests";
-        "bench" = "--benches";
-        "all" = "--tests --benches";
-      }.${compileMode} or "";
       featuresArg = if featuresWithoutDefault == [ ]
-        then ""
-        else "--features ${concatStringsSep "," featuresWithoutDefault}";
-    in
-      ''
-        cargo build $CARGO_VERBOSE ${optionalString release "--release"} --target ${host-triple} ${buildMode} \
-          ${featuresArg} ${optionalString (!hasDefaultFeature) "--no-default-features"}
-      '';
+        then []
+        else [ "--features" (concatStringsSep "," featuresWithoutDefault) ];
+    in lib.concatLists [
+      (lib.optional release "--release")
+      [ "--target" host-triple ]
+      featuresArg
+      (lib.optional (!hasDefaultFeature) "--no-default-features")
+      extraCargoArguments
+    ];
+
+    runInEnv = cmd: ''
+      (
+        set -euo pipefail
+        if (( NIX_DEBUG >= 1 )); then
+          set -x
+        fi
+        env \
+          "CC_${stdenv.buildPlatform.config}"="${ccForBuild}" \
+          "CXX_${stdenv.buildPlatform.config}"="${cxxForBuild}" \
+          "CC_${host-triple}"="${ccForHost}" \
+          "CXX_${host-triple}"="${cxxForHost}" \
+          "''${depKeys[@]}" \
+          ${cmd}
+      )
+    '';
 
     inherit
       (({ right, wrong }: { runtimeDependencies = right; buildtimeDependencies = wrong; })
         (partition (drv: drv.stdenv.hostPlatform == stdenv.hostPlatform)
           (concatLists [
             (attrValues dependencies)
-            (optionals (compileMode == "test") (attrValues devDependencies))
+            (optionals doCheck (attrValues devDependencies))
             (attrValues buildDependencies)
           ])))
       runtimeDependencies buildtimeDependencies;
 
   drvAttrs = {
     inherit NIX_DEBUG;
-    name = "crate-${name}-${version}${optionalString (compileMode != "build") "-${compileMode}"}";
+    name = "crate-${name}-${version}";
     inherit src version meta;
     propagatedBuildInputs = lib.unique
       (lib.concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
@@ -122,7 +137,7 @@ let
 
     dependencies = depMapToList dependencies;
     buildDependencies = depMapToList buildDependencies;
-    devDependencies = depMapToList (optionalAttrs (compileMode == "test") devDependencies);
+    devDependencies = depMapToList (optionalAttrs doCheck devDependencies);
 
     extraRustcFlags = rustcflags;
 
@@ -143,7 +158,7 @@ let
 
     manifestPatch = toJSON {
       features = genAttrs features (_: [ ]);
-      profile.${ decideProfile compileMode release } = profile;
+      profile.${ decideProfile doCheck release } = profile;
     };
 
     overrideCargoManifest = ''
@@ -170,23 +185,19 @@ let
         runHook postConfigure
       '';
 
-    runCargo = ''
-      (
-        set -euo pipefail
-        if (( NIX_DEBUG >= 1 )); then
-          set -x
-        fi
-        env \
-          "CC_${stdenv.buildPlatform.config}"="${ccForBuild}" \
-          "CXX_${stdenv.buildPlatform.config}"="${cxxForBuild}" \
-          "CC_${host-triple}"="${ccForHost}" \
-          "CXX_${host-triple}"="${cxxForHost}" \
-          "''${depKeys[@]}" \
-          ${buildCmd}
-      )
-    '';
+    inherit commonCargoArgs;
 
+    runCargo = runInEnv "cargo build $CARGO_VERBOSE $commonCargoArgs";
+    checkPhase = runInEnv "cargo test $CARGO_VERBOSE $commonCargoArgs" +
+      lib.optionalString doBench (runInEnv ''
+        cargo bench $CARGO_VERBOSE ''${commonCargoArgs[@]/--release}
+      '');
+
+    # manually override doCheck. stdenv.mkDerivation sets it to false if
+    # hostPlatform != buildPlatform, but that's not necessarily correct (for example,
+    # when targeting musl from gnu linux)
     setBuildEnv = ''
+      export doCheck=${if doCheck then "1" else ""}
       isProcMacro="$( \
         remarshal -if toml -of json Cargo.original.toml \
         | jq -r 'if .lib."proc-macro" or .lib."proc_macro" then "1" else "" end' \

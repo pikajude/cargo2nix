@@ -75,7 +75,7 @@ in rec {
 
   capLints = makeOverride {
     registry = "registry+https://github.com/rust-lang/crates.io-index";
-    overrideArgs = old: { rustcflags = old.rustcflags or [ ] ++ [ "--cap-lints" "warn" ]; };
+    overrideArgs = old: { extraFlags = (old.extraFlags or [ ]) ++ [ "--cap-lints" "warn" ]; };
   };
 
   curl-sys = makeOverride {

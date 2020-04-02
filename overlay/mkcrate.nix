@@ -20,37 +20,27 @@
   buildDependencies ? { },
   profile,
   meta ? { },
-  rustcflags ? [ ],
-  rustcBuildFlags ? [ ],
+  extraFlags ? [ ],
+  extraRustcFlags ? [ ],
+  extraRustcBuildFlags ? [ ],
   NIX_DEBUG ? 0,
   doCheck ? false,
-  doBench ? doCheck,
+  doBench ? doCheck && release,
+  doDoc ? true,
   extraCargoArguments ? [ ],
 }:
 with builtins; with lib;
 let
   inherit (rustLib) realHostTriple decideProfile;
 
-  wrapper = rustpkg: pkgs.writeScriptBin rustpkg ''
-    #!${stdenv.shell}
-    . ${./utils.sh}
-    isBuildScript=
-    args=("$@")
-    for i in "''${!args[@]}"; do
-      if [ "xmetadata=" = "x''${args[$i]::9}" ]; then
-        args[$i]=metadata=$NIX_RUST_METADATA
-      elif [ "x--crate-name" = "x''${args[$i]}" ] && [ "xbuild_script_" = "x''${args[$i+1]::13}" ]; then
-        isBuildScript=1
-      fi
-    done
-    if [ "$isBuildScript" ]; then
-      args+=($NIX_RUST_BUILD_LINK_FLAGS)
-    else
-      args+=($NIX_RUST_LINK_FLAGS)
-    fi
-    touch invoke.log
-    echo "''${args[@]}" >>invoke.log
-    exec ${rustc}/bin/${rustpkg} "''${args[@]}"
+  wrapper = exename: pkgs.runCommand "${exename}-wrapper" {
+    inherit (stdenv) shell;
+    inherit exename rustc;
+    utils = ./utils.sh;
+  } ''
+    mkdir -p $out/bin
+    substituteAll ${./wrapper.sh} $out/bin/$exename
+    chmod +x $out/bin/$exename
   '';
 
   ccForBuild="${buildPackages.stdenv.cc}/bin/${buildPackages.stdenv.cc.targetPrefix}cc";
@@ -64,17 +54,17 @@ let
     flatten
       (sort (a: b: elemAt a 0 < elemAt b 0)
         (mapAttrsToList (name: value: [ name "${value}" ]) deps));
+  releaseArg = lib.optionalString release "--release";
+  hasDefaultFeature = elem "default" features;
+  featuresWithoutDefault = if hasDefaultFeature
+    then filter (feature: feature != "default") features
+    else features;
   commonCargoArgs =
     let
-      hasDefaultFeature = elem "default" features;
-      featuresWithoutDefault = if hasDefaultFeature
-        then filter (feature: feature != "default") features
-        else features;
       featuresArg = if featuresWithoutDefault == [ ]
         then []
         else [ "--features" (concatStringsSep "," featuresWithoutDefault) ];
     in lib.concatLists [
-      (lib.optional release "--release")
       [ "--target" host-triple ]
       featuresArg
       (lib.optional (!hasDefaultFeature) "--no-default-features")
@@ -139,9 +129,7 @@ let
     buildDependencies = depMapToList buildDependencies;
     devDependencies = depMapToList (optionalAttrs doCheck devDependencies);
 
-    extraRustcFlags = rustcflags;
-
-    extraRustcBuildFlags = rustcBuildFlags;
+    inherit extraFlags extraRustcFlags extraRustcBuildFlags;
 
     # HACK: 2019-08-01: wasm32-wasi always uses `wasm-ld`
     configureCargo = ''
@@ -187,12 +175,30 @@ let
 
     inherit commonCargoArgs;
 
-    runCargo = runInEnv "cargo build $CARGO_VERBOSE $commonCargoArgs";
-    checkPhase = runInEnv "cargo test $CARGO_VERBOSE $commonCargoArgs" +
-      lib.optionalString doBench (runInEnv ''
-        cargo bench $CARGO_VERBOSE ''${commonCargoArgs[@]/--release}
+    # Unfortunately we can't share any build artifacts between the build and other
+    # phases because `cargo test` uses a different config (resulting in different metadata).
+    # So we don't pass `--release` to any other subcommands even though most of them accept it.
+    runCargo = runInEnv "cargo build $CARGO_VERBOSE $CARGO_RELEASE $commonCargoArgs";
+
+    checkPhase = runInEnv ''
+      cargo test $CARGO_VERBOSE $commonCargoArgs --target-dir target_check
+    ''
+      + lib.optionalString doBench (runInEnv ''
+        cargo bench $CARGO_VERBOSE $commonCargoArgs --target-dir target_check
       '');
 
+    postBuild = lib.optionalString doDoc ''
+      ${runInEnv "cargo doc $CARGO_VERBOSE $commonCargoArgs --target-dir target_check"}
+      mkdir -p $out/share
+      if [ -e target/check/${host-triple}/doc ]; then
+        cp -rT target/check/${host-triple}/doc $out/share/doc
+      fi
+    '';
+
+    # set doCheck here so that we can conditionally apply overrides when
+    # a crate is being tested or not. HOWEVER this does nothing for cross
+    # builds, see below
+    inherit doCheck;
     # manually override doCheck. stdenv.mkDerivation sets it to false if
     # hostPlatform != buildPlatform, but that's not necessarily correct (for example,
     # when targeting musl from gnu linux)
@@ -216,10 +222,14 @@ let
       linkExternCrateToDeps `realpath deps` $dependencies $devDependencies
       linkExternCrateToDeps `realpath build_deps` $buildDependencies
 
-      export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
-      export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"
+      export NIX_RUSTC_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps)"
+      export NIX_RUSTC_BUILD_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps)"
+      export NIX_EXTRA_RUST_FLAGS="$extraFlags"
+      export NIX_EXTRA_RUSTC_FLAGS="$extraRustcFlags"
+      export NIX_EXTRA_RUSTC_BUILD_FLAGS="$extraRustcBuildFlags"
       export RUSTC=${wrapper "rustc"}/bin/rustc
       export RUSTDOC=${wrapper "rustdoc"}/bin/rustdoc
+      export CARGO_RELEASE=${releaseArg}
 
       depKeys=(`loadDepKeys $dependencies`)
 
@@ -233,15 +243,19 @@ let
     '';
 
     buildPhase = ''
+      runHook preBuild
       runHook overrideCargoManifest
       runHook setBuildEnv
       runHook runCargo
+      runHook postBuild
     '';
 
     installPhase = ''
+      runHook preInstall
       mkdir -p $out/lib
       cargo_links="$(remarshal -if toml -of json Cargo.original.toml | jq -r '.package.links | select(. != null)')"
       install_crate ${host-triple} ${if release then "release" else "debug"}
+      runHook postInstall
     '';
   };
 in

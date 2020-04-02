@@ -102,7 +102,7 @@ dumpDepInfo() {
             ;;
             rustc-link-search)
                 if [[ "$val" = *"$NIX_BUILD_TOP"* ]]; then
-                    echo >&2 "not propagating linker arg '$val'"
+                    debug_print "not propagating linker arg '$val'"
                 else
                     echo "-L" `printf '%q' $val` >>$link_flags
                 fi
@@ -121,7 +121,7 @@ dumpDepInfo() {
 install_crate() {
     local host_triple=$1
     local mode=$2
-    pushd target/${host_triple}/${mode}
+    pushd target/${host_triple}/${mode} >/dev/null
     local needs_deps=
     local has_output=
     for output in *; do
@@ -157,13 +157,13 @@ install_crate() {
             esac
         fi
     done
-    popd
+    popd >/dev/null
 
     touch $out/lib/.link-flags
     loadExternCrateLinkFlags $dependencies >> $out/lib/.link-flags
 
     if [ "$isProcMacro" ]; then
-        pushd target/${mode}
+        pushd target/${mode} >/dev/null
         for output in *; do
             if [ -d "$output" ]; then
                 continue
@@ -181,7 +181,7 @@ install_crate() {
                     continue
             esac
         done
-        popd
+        popd >/dev/null
     fi
 
     if [ ! "$has_output" ]; then
@@ -213,4 +213,9 @@ cargoVerbosityLevel() {
   fi
 
   echo ${verbose_flag}
+}
+debug_print() {
+  if (( $NIX_DEBUG >= 1 )); then
+    echo >&2 "$@"
+  fi
 }

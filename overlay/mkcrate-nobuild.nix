@@ -15,6 +15,7 @@
   meta ? { },
   rustcflags ? [ ],
   rustcBuildFlags ? [ ],
+  ...
 }:
 with lib; with builtins;
 let

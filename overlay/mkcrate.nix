@@ -25,7 +25,7 @@
   extraRustcBuildFlags ? [ ],
   NIX_DEBUG ? 0,
   doCheck ? false,
-  doBench ? doCheck && release,
+  doBench ? false,
   doDoc ? true,
   extraCargoArguments ? [ ],
 }:

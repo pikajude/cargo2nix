@@ -56,7 +56,7 @@ lib.fix' (self:
   in packageFunWith { mkRustCrate = mkRustCrate'; buildRustPackages = buildRustPackages'; } // {
     inherit rustPackages callPackage cargo rustc pkgs;
     noBuild = packageFunWith {
-      mkRustCrate = lib.makeOverridable mkRustCrateNoBuild { };
+      mkRustCrate = lib.makeOverridable (callPackage mkRustCrateNoBuild { });
       buildRustPackages = buildRustPackages'.noBuild;
     };
     mkRustCrate = mkRustCrate';

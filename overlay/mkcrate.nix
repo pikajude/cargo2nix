@@ -28,6 +28,7 @@
   doBench ? false,
   doDoc ? true,
   extraCargoArguments ? [ ],
+  extraBuildVars ? { },
 }:
 with builtins; with lib;
 let
@@ -97,6 +98,12 @@ let
           ])))
       runtimeDependencies buildtimeDependencies;
 
+  # collect environment variables from dependencies (for use in shell)
+  buildVars = lib.foldl'
+    (x: y: x // y.extraBuildVars) {}
+    (runtimeDependencies ++ buildtimeDependencies)
+      // extraBuildVars;
+
   drvAttrs = {
     inherit NIX_DEBUG;
     name = "crate-${name}-${version}";
@@ -122,6 +129,7 @@ let
         devDependencies
         buildDependencies
         features;
+      extraBuildVars = buildVars;
       shell = pkgs.mkShell (removeAttrs drvAttrs ["src"]);
     };
 
@@ -257,6 +265,6 @@ let
       install_crate ${host-triple} ${if release then "release" else "debug"}
       runHook postInstall
     '';
-  };
+  } // extraBuildVars;
 in
   stdenv.mkDerivation drvAttrs

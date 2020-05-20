@@ -13,6 +13,7 @@
   buildRustPackages ? null,
   localPatterns ? [ ''^(src|tests)(/.*)?'' ''[^/]*\.(rs|toml)$'' ],
   packageOverrides ? [ ],
+  buildEnv ? { },
   fetchCrateAlternativeRegistry ? _: throw "fetchCrateAlternativeRegistry is required, but not specified in makePackageSet",
   release ? null,
   rootFeatures ? null,
@@ -39,7 +40,7 @@ lib.fix' (self:
     defaultScope = mkScope self;
     callPackage = lib.callPackageWith defaultScope;
 
-    mkRustCrate' = lib.makeOverridable (callPackage mkRustCrate { inherit rustLib; });
+    mkRustCrate' = lib.makeOverridable (callPackage mkRustCrate { inherit rustLib buildEnv; });
     combinedOverride = builtins.foldl' rustLib.combineOverrides rustLib.nullOverride packageOverrides;
     packageFunWith = { mkRustCrate, buildRustPackages }: lib.fix (rustPackages: packageFun {
       inherit rustPackages buildRustPackages lib;

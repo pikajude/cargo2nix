@@ -7,6 +7,7 @@
   buildPackages,
   rustLib,
   stdenv,
+  buildEnv,
 }:
 {
   release, # Compiling in release mode?
@@ -28,7 +29,6 @@
   doBench ? false,
   doDoc ? true,
   extraCargoArguments ? [ ],
-  extraBuildVars ? { },
 }:
 with builtins; with lib;
 let
@@ -98,12 +98,6 @@ let
           ])))
       runtimeDependencies buildtimeDependencies;
 
-  # collect environment variables from dependencies (for use in shell)
-  buildVars = lib.foldl'
-    (x: y: x // y.extraBuildVars) {}
-    (runtimeDependencies ++ buildtimeDependencies)
-      // extraBuildVars;
-
   drvAttrs = {
     inherit NIX_DEBUG;
     name = "crate-${name}-${version}";
@@ -129,7 +123,6 @@ let
         devDependencies
         buildDependencies
         features;
-      extraBuildVars = buildVars;
       shell = pkgs.mkShell (removeAttrs drvAttrs ["src"]);
     };
 
@@ -164,13 +157,9 @@ let
       echo source = \"registry+${registry}\" >> Cargo.lock
       mv Cargo.toml Cargo.original.toml
       remarshal -if toml -of json Cargo.original.toml \
-        | jq "{ package: .package
-              , lib: .lib
-              , bin: .bin
-              , test: .test
-              , example: .example
+        | jq "{ package, lib, bin, test, example
               , bench: (if \"$registry\" == \"unknown\" then .bench else null end)
-              } + $manifestPatch" \
+         } + $manifestPatch" \
         | remarshal -if json -of toml > Cargo.toml
     '';
 
@@ -265,6 +254,6 @@ let
       install_crate ${host-triple} ${if release then "release" else "debug"}
       runHook postInstall
     '';
-  } // extraBuildVars;
+  } // buildEnv;
 in
   stdenv.mkDerivation drvAttrs

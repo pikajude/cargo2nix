@@ -34,6 +34,41 @@ makeExternCrateFlags() {
         fi
     done
 }
+# for cargo doc to work, we need
+# 1. --extern foo=foo.rmeta for every dependency
+# 2. symlinks to documentation in the target directory
+makeExternDocFlags() {
+    local i=
+    for (( i=1; i<$#; i+=2 )); do
+        local extern_name="${@:$i:1}"
+        local crate="${@:((i+1)):1}"
+        [ -f "$crate/.cargo-info" ] || continue
+        local crate_name=`jq -r '.name' $crate/.cargo-info`
+        if [ -f "$crate/lib/lib${crate_name}.rmeta" ]; then
+            echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.rmeta"
+        elif [ -f "$crate/lib/lib${crate_name}.dylib" ]; then
+            echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.dylib"
+        elif [ -f "$crate/lib/lib${crate_name}.rlib" ]; then
+            echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.rlib"
+        fi
+    done
+}
+linkDocs() {
+    local docsdir="$1"
+    for (( i=2; i<$#; i+=2 )); do
+        local extern_name="${@:$i:1}"
+        local crate="${@:((i+1)):1}"
+        [ -f "$crate/.cargo-info" ] || continue
+        local crate_name=`jq -r '.name' $crate/.cargo-info`
+        if [ "$crate_name" = "$crateName" ]; then
+            debug_print "not linking docs for crate $crate since it has the same name as self"
+        elif [ -d "$crate/share/doc/$crate_name" ]; then
+            ln -s "$crate/share/doc/$crate_name" "$docsdir"
+        else
+            debug_print "missing docs for $crate"
+        fi
+    done
+}
 loadExternCrateLinkFlags() {
     local i=
     for (( i=1; i<$#; i+=2 )); do
@@ -126,7 +161,13 @@ install_crate() {
     local has_output=
     for output in *; do
         if [ -d "$output" ]; then
-            continue
+            (
+                shopt -s nullglob
+                rmeta="$(echo $output/*.rmeta)"
+                if [ -n "$rmeta" ]; then
+                    cp "$rmeta" "$out/lib/lib${crateName}.rmeta"
+                fi
+            )
         elif [ -x "$output" ]; then
             mkdir -p $out/bin
             cp $output $out/bin/

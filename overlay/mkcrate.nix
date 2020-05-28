@@ -185,11 +185,15 @@ let
       '');
 
     postBuild = lib.optionalString doDoc ''
-      ${runInEnv "cargo doc $CARGO_VERBOSE $commonCargoArgs --target-dir target_check"}
+      docDir="target_check/${host-triple}/doc"
+      mkdir -p "$docDir"
+      linkDocs "$docDir" $dependencies $devDependencies
+      ${runInEnv ''
+        NIX_RUSTC_FLAGS="$(makeExternDocFlags $dependencies $devDependencies) -L dependency=$(realpath deps)" \
+        cargo doc $CARGO_VERBOSE $commonCargoArgs --target-dir target_check
+      ''}
       mkdir -p $out/share
-      if [ -e target/check/${host-triple}/doc ]; then
-        cp -rT target/check/${host-triple}/doc $out/share/doc
-      fi
+      cp -rT "$docDir" $out/share/doc
     '';
 
     # set doCheck here so that we can conditionally apply overrides when

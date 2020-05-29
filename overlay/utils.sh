@@ -50,9 +50,8 @@ makeExternDocFlags() {
             echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.dylib"
         elif [ -f "$crate/lib/lib${crate_name}.so" ]; then
             echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.so"
-        elif [ -f "$crate/lib/lib${crate_name}.rlib" ]; then
-            echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.rlib"
         fi
+        echo "-L" dependency=$crate/lib/deps
     done
 }
 linkDocs() {
@@ -64,8 +63,16 @@ linkDocs() {
         local crate_name=`jq -r '.name' $crate/.cargo-info`
         if [ "$crate_name" = "$crateName" ]; then
             debug_print "not linking docs for crate $crate since it has the same name as self"
-        elif [ -d "$crate/share/doc/$crate_name" ]; then
-            ln -s "$crate/share/doc/$crate_name" "$docsdir"
+        elif [ -d "$crate/share/doc" ]; then
+            for file in $(find "$crate/share/doc" -type l -maxdepth 1); do
+                # preserve links to dependency-of-dependency docs
+                cp -Pf "$file" "$docsdir"
+            done
+            ln -sf "$crate/share/doc/$crate_name" "$docsdir"
+            # if the workspace contains multiple crates with the same name, or we transitively
+            # depend on another version of self, remove it here because rustdoc will
+            # otherwise fail when trying to create the output dir
+            rm -f "$docsdir/$crateName"
         else
             debug_print "missing docs for $crate"
         fi

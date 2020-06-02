@@ -27,7 +27,7 @@
   NIX_DEBUG ? 0,
   doCheck ? false,
   doBench ? false,
-  doDoc ? true,
+  doDoc ? false,
   extraCargoArguments ? [ ],
 }:
 with builtins; with lib;

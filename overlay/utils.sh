@@ -50,6 +50,8 @@ makeExternDocFlags() {
             echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.dylib"
         elif [ -f "$crate/lib/lib${crate_name}.so" ]; then
             echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.so"
+        elif [ -f "$crate/lib/lib${crate_name}.rlib" ]; then
+            echo "--extern" "${extern_name}=$crate/lib/lib${crate_name}.rlib"
         fi
         echo "-L" dependency=$crate/lib/deps
     done

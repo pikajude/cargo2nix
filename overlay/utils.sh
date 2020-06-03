@@ -80,18 +80,6 @@ linkDocs() {
         fi
     done
 }
-loadExternCrateLinkFlags() {
-    local i=
-    for (( i=1; i<$#; i+=2 )); do
-        local extern_name="${@:$i:1}"
-        local crate="${@:((i+1)):1}"
-        [ -f "$crate/.cargo-info" ] || continue
-        local crate_name=`jq -r '.name' $crate/.cargo-info`
-        if [ -f "$crate/lib/.link-flags" ]; then
-            cat $crate/lib/.link-flags
-        fi
-    done
-}
 loadDepKeys() {
     for (( i=2; i<=$#; i+=2 )); do
         local crate="${@:$i:1}"
@@ -210,9 +198,6 @@ install_crate() {
         fi
     done
     popd >/dev/null
-
-    touch $out/lib/.link-flags
-    loadExternCrateLinkFlags $dependencies >> $out/lib/.link-flags
 
     if [ "$isProcMacro" ]; then
         pushd target/${mode} >/dev/null

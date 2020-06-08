@@ -144,23 +144,13 @@ fn write_to_file(file: impl AsRef<Path>) -> Result<()> {
       vers_req,
       ver
     );
-    print!(
-      "warning: do you want to overwrite '{}'? yes/no: ",
-      path.display()
-    );
-
-    io::stdout().flush()?;
-    let mut line = String::new();
-    io::stdin().read_line(&mut line)?;
-    if line.trim() != "yes" {
-      println!("aborted!");
-      return Ok(());
-    }
   }
 
   let mut temp_file = tempfile::Builder::new()
     .tempfile()
     .context("could not create new temporary file")?;
+
+  println!("Generating a new Cargo.nix. Please be patient, this could take a few minutes.");
 
   generate_cargo_nix(&mut temp_file)?;
 

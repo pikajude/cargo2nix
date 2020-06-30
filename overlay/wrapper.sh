@@ -20,5 +20,6 @@ else
     args+=($NIX_EXTRA_RUSTC_FLAGS)
   fi
 fi
+args+=("--remap-path-prefix" "$NIX_BUILD_TOP=/source")
 debug_print "$exepath ${args[@]}"
 exec "$exepath" "${args[@]}"

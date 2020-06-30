@@ -20,6 +20,9 @@ else
     args+=($NIX_EXTRA_RUSTC_FLAGS)
   fi
 fi
-args+=("--remap-path-prefix" "$NIX_BUILD_TOP=/source")
+if [ "$exename" = rustc ]; then
+  # not supported by rustdoc, which is called to run doctests
+  args+=("--remap-path-prefix" "$NIX_BUILD_TOP=/source")
+fi
 debug_print "$exepath ${args[@]}"
 exec "$exepath" "${args[@]}"

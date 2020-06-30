@@ -551,17 +551,17 @@ fn display_root_feature((pkg_name, feature): RootFeature) -> String {
 }
 
 fn prefetch_git(url: &str, rev: &str) -> Result<String> {
-  use std::process::{Command, Output};
+  use std::process::{Command, Output, Stdio};
 
   let Output {
     stdout,
     stderr,
     status,
   } = Command::new("nix-prefetch-git")
-    .arg("--quiet")
     .arg("--fetch-submodules")
     .args(&["--url", url])
     .args(&["--rev", rev])
+    .stderr(Stdio::inherit())
     .output()?;
 
   if status.success() {

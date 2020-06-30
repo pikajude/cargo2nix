@@ -23,6 +23,7 @@ use failure::{Error, ResultExt};
 use semver::{Version, VersionReq};
 use tera::Tera;
 use sha2::{Sha256,Digest};
+use lazy_static::lazy_static;
 
 use crate::expr::BoolExpr;
 use crate::template::BuildPlan;
@@ -552,29 +553,44 @@ fn display_root_feature((pkg_name, feature): RootFeature) -> String {
 
 fn prefetch_git(url: &str, rev: &str) -> Result<String> {
   use std::process::{Command, Output, Stdio};
+  use std::sync::Mutex;
 
-  let Output {
-    stdout,
-    stderr,
-    status,
-  } = Command::new("nix-prefetch-git")
-    .arg("--fetch-submodules")
-    .args(&["--url", url])
-    .args(&["--rev", rev])
-    .stderr(Stdio::inherit())
-    .output()?;
+  lazy_static! {
+    static ref GIT_HASHES: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+  }
 
-  if status.success() {
-    serde_json::from_slice::<serde_json::Value>(&stdout)?
-      .get("sha256")
-      .and_then(|v| v.as_str())
-      .map(|s| s.to_string())
-      .ok_or_else(|| failure::format_err!("unexpected JSON output"))
+  let key = format!("{}+{}", url, rev);
+
+  let mut h = GIT_HASHES.lock().unwrap();
+
+  if h.contains_key(&key) {
+    Ok(h[&key].clone())
   } else {
-    Err(failure::format_err!(
-      "process failed with stderr {:?}",
-      String::from_utf8(stderr)
-    ))
+    let Output {
+      stdout,
+      stderr,
+      status,
+    } = Command::new("nix-prefetch-git")
+      .arg("--fetch-submodules")
+      .args(&["--url", url])
+      .args(&["--rev", rev])
+      .stderr(Stdio::inherit())
+      .output()?;
+
+    if status.success() {
+      let s = serde_json::from_slice::<serde_json::Value>(&stdout)?
+        .get("sha256")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| failure::format_err!("unexpected JSON output"))?;
+      h.insert(key.clone(), s.clone());
+      Ok(s)
+    } else {
+      Err(failure::format_err!(
+        "process failed with stderr {:?}",
+        String::from_utf8(stderr)
+      ))
+    }
   }
 }
 

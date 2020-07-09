@@ -4,7 +4,7 @@ use std::{
   borrow::Cow,
   collections::{BTreeMap, BTreeSet, HashMap},
   fs,
-  io::{self, BufRead, Write},
+  io::{self, BufRead},
   path::Path,
 };
 
@@ -155,8 +155,8 @@ fn write_to_file(file: impl AsRef<Path>) -> Result<()> {
 
   generate_cargo_nix(&mut temp_file)?;
 
-  temp_file
-    .persist(path)
+  // persist() will fail if $TMPDIR is on a tmpfs (in nix-shell, for example).
+  fs::copy(temp_file.path(), path)
     .context(format!("could not write file to {}", path.display()))?;
 
   Ok(())

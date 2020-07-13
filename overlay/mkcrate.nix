@@ -98,9 +98,16 @@ let
           ])))
       runtimeDependencies buildtimeDependencies;
 
+  namePrefix = lib.concatStringsSep "-" (lib.flatten [
+    (lib.optional doBench "bench")
+    (lib.optional doCheck "test")
+    (lib.optional doDoc "doc")
+    [ "crate" ]
+  ]);
+
   drvAttrs = {
     inherit NIX_DEBUG;
-    name = "crate-${name}-${version}";
+    name = "${namePrefix}-${name}-${version}";
     inherit src version meta;
     propagatedBuildInputs = lib.unique
       (lib.concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
@@ -179,27 +186,32 @@ let
 
     checkPhase = runInEnv ''
       cargo test $CARGO_VERBOSE $commonCargoArgs --target-dir target_check
-    ''
-      + lib.optionalString doBench (runInEnv ''
-        cargo bench $CARGO_VERBOSE $commonCargoArgs --target-dir target_check
-      '');
+    '';
 
-    postBuild = lib.optionalString doDoc ''
-      docDir="target_check/${host-triple}/doc"
-      mkdir -p "$docDir"
-      linkDocs "$docDir" $dependencies $devDependencies
-      ${runInEnv ''
-        NIX_RUSTC_FLAGS="$(makeExternDocFlags $dependencies $devDependencies) -L dependency=$(realpath deps)" \
-        cargo doc $CARGO_VERBOSE $commonCargoArgs --target-dir target_check
-      ''}
-      mkdir -p $out/share
-      cp -rT "$docDir" $out/share/doc
+    runBenchmarks = ''
+      if [ -n "$doBench" ]; then
+        ${runInEnv ''cargo bench $CARGO_VERBOSE $commonCargoArgs --target-dir target_check''}
+      fi
+    '';
+
+    runRustdoc = ''
+      if [ -n "$doDoc" ]; then
+        docDir="target_check/${host-triple}/doc"
+        mkdir -p "$docDir"
+        linkDocs "$docDir" $dependencies $devDependencies
+        ${runInEnv ''
+          NIX_RUSTC_FLAGS="$(makeExternDocFlags $dependencies $devDependencies) -L dependency=$(realpath deps)" \
+          cargo doc $CARGO_VERBOSE $commonCargoArgs --target-dir target_check
+        ''}
+        mkdir -p $out/share
+        cp -rT "$docDir" $out/share/doc
+      fi
     '';
 
     # set doCheck here so that we can conditionally apply overrides when
     # a crate is being tested or not. HOWEVER this does nothing for cross
     # builds, see below
-    inherit doCheck;
+    inherit doCheck doBench doDoc;
     # manually override doCheck. stdenv.mkDerivation sets it to false if
     # hostPlatform != buildPlatform, but that's not necessarily correct (for example,
     # when targeting musl from gnu linux)
@@ -248,6 +260,8 @@ let
       runHook overrideCargoManifest
       runHook setBuildEnv
       runHook runCargo
+      runHook runBenchmarks
+      runHook runRustdoc
       runHook postBuild
     '';
 

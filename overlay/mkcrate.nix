@@ -72,31 +72,31 @@ let
       extraCargoArguments
     ];
 
-    runInEnv = cmd: ''
-      (
-        set -euo pipefail
-        if (( NIX_DEBUG >= 1 )); then
-          set -x
-        fi
-        env \
-          "CC_${stdenv.buildPlatform.config}"="${ccForBuild}" \
-          "CXX_${stdenv.buildPlatform.config}"="${cxxForBuild}" \
-          "CC_${host-triple}"="${ccForHost}" \
-          "CXX_${host-triple}"="${cxxForHost}" \
-          "''${depKeys[@]}" \
-          ${cmd}
-      )
-    '';
+  runInEnv = cmd: ''
+    (
+      set -euo pipefail
+      if (( NIX_DEBUG >= 1 )); then
+        set -x
+      fi
+      env \
+        "CC_${stdenv.buildPlatform.config}"="${ccForBuild}" \
+        "CXX_${stdenv.buildPlatform.config}"="${cxxForBuild}" \
+        "CC_${host-triple}"="${ccForHost}" \
+        "CXX_${host-triple}"="${cxxForHost}" \
+        "''${depKeys[@]}" \
+        ${cmd}
+    )
+  '';
 
-    inherit
-      (({ right, wrong }: { runtimeDependencies = right; buildtimeDependencies = wrong; })
-        (partition (drv: drv.stdenv.hostPlatform == stdenv.hostPlatform)
-          (concatLists [
-            (attrValues dependencies)
-            (optionals doCheck (attrValues devDependencies))
-            (attrValues buildDependencies)
-          ])))
-      runtimeDependencies buildtimeDependencies;
+  inherit
+    (({ right, wrong }: { runtimeDependencies = right; buildtimeDependencies = wrong; })
+      (partition (drv: drv.stdenv.hostPlatform == stdenv.hostPlatform)
+        (concatLists [
+          (attrValues dependencies)
+          (optionals doCheck (attrValues devDependencies))
+          (attrValues buildDependencies)
+        ])))
+    runtimeDependencies buildtimeDependencies;
 
   drvAttrs = {
     inherit NIX_DEBUG;

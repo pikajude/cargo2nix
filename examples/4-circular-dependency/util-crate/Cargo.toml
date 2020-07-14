@@ -1,0 +1,8 @@
+[package]
+name = "util-crate"
+version = "0.1.0"
+authors = ["Jude Taylor <jude.taylor@dfinity.org>"]
+edition = "2018"
+
+[dependencies]
+lib-crate = { path = "../lib-crate" }

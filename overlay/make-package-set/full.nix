@@ -12,6 +12,7 @@
   cargo,
   rustc,
   buildRustPackages ? null,
+  fetchCrateLocal ? path: (lib.sourceByRegex path localPatterns).outPath,
   localPatterns ? [ ''^(src|tests)(/.*)?'' ''[^/]*\.(rs|toml)$'' ],
   packageOverrides ? rustBuilder.overrides.all,
   fetchCrateAlternativeRegistry ? _: throw "fetchCrateAlternativeRegistry is required, but not specified in makePackageSet",
@@ -49,8 +50,7 @@ lib.fix' (self:
       inherit (stdenv) hostPlatform;
       mkRustCrate = rustLib.runOverride combinedOverride mkRustCrate;
       rustLib = rustLib // {
-        inherit fetchCrateAlternativeRegistry;
-        fetchCrateLocal = path: (lib.sourceByRegex path localPatterns).outPath;
+        inherit fetchCrateAlternativeRegistry fetchCrateLocal;
       };
       ${ if release == null then null else "release" } = release;
       ${ if rootFeatures == null then null else "rootFeatures" } = rootFeatures;

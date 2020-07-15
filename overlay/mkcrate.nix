@@ -39,8 +39,10 @@ let
     for i in "''${!args[@]}"; do
       if [ "xmetadata=" = "x''${args[$i]::9}" ]; then
         args[$i]=metadata=$NIX_RUST_METADATA
-      elif [ "x--crate-name" = "x''${args[$i]}" ] && [ "xbuild_script_" = "x''${args[$i+1]::13}" ]; then
-        isBuildScript=1
+      elif [ "--crate-name" = "''${args[$i]}" ]; then
+        if [ "xbuild_script_" = "x''${args[$i+1]::13}" ]; then
+          isBuildScript=1
+        fi
       fi
     done
     if [ "$isBuildScript" ]; then
@@ -82,13 +84,17 @@ let
         cargo build $CARGO_VERBOSE ${optionalString release "--release"} --target ${host-triple} ${buildMode} \
           ${featuresArg} ${optionalString (!hasDefaultFeature) "--no-default-features"}
       '';
+  needDevDependencies = compileMode == "test" || compileMode == "bench";
+  preserveBench = if registry == "unknown"
+    then ".bench"
+    else "null";
 
   inherit
     (({ right, wrong }: { runtimeDependencies = right; buildtimeDependencies = wrong; })
       (partition (drv: drv.stdenv.hostPlatform == stdenv.hostPlatform)
         (concatLists [
           (attrValues dependencies)
-          (optionals (compileMode == "test") (attrValues devDependencies))
+          (optionals needDevDependencies (attrValues devDependencies))
           (attrValues buildDependencies)
         ])))
     runtimeDependencies buildtimeDependencies;
@@ -96,9 +102,10 @@ let
   drvAttrs = {
     inherit NIX_DEBUG;
     name = "crate-${name}-${version}${optionalString (compileMode != "build") "-${compileMode}"}";
-    inherit src version meta;
+    inherit src version meta needDevDependencies;
+    buildMode = if release then "release" else "debug";
     buildInputs = runtimeDependencies;
-    propagatedBuildInputs = concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies;
+    propagatedBuildInputs = lib.unique (concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
     nativeBuildInputs = [ cargo ] ++ buildtimeDependencies;
 
     depsBuildBuild =
@@ -125,7 +132,7 @@ let
 
     dependencies = depMapToList dependencies;
     buildDependencies = depMapToList buildDependencies;
-    devDependencies = depMapToList (optionalAttrs (compileMode == "test") devDependencies);
+    devDependencies = depMapToList (optionalAttrs needDevDependencies devDependencies);
 
     extraRustcFlags =
       optionals (hostPlatformCpu != null) ([("-Ctarget-cpu=" + hostPlatformCpu)]) ++
@@ -164,7 +171,7 @@ let
               , bin: .bin
               , test: .test
               , example: .example
-              , bench: (if \"$registry\" == \"unknown\" then .bench else null end)
+              , bench: ${preserveBench}
               } + $manifestPatch" \
         | remarshal -if json -of toml > Cargo.toml
     '';
@@ -208,11 +215,10 @@ let
       mkdir -p deps build_deps
       linkFlags=(`makeExternCrateFlags $dependencies $devDependencies`)
       buildLinkFlags=(`makeExternCrateFlags $buildDependencies`)
-      linkExternCrateToDeps `realpath deps` $dependencies $devDependencies
-      linkExternCrateToDeps `realpath build_deps` $buildDependencies
 
-      export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
-      export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"
+      export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} $extraRustcFlags"
+      export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} $extraRustcBuildFlags"
+      export crateName noRebuildHack
       export RUSTC=${wrapper "rustc"}/bin/rustc
       export RUSTDOC=${wrapper "rustdoc"}/bin/rustdoc
 

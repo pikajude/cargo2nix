@@ -28,7 +28,6 @@ makeExternCrateFlags() {
             echo do not know how to find $extern_name \($crate_name\) >&2
             exit 1
         fi
-        # echo "-L" dependency=$crate/lib/deps
         if [ -f "$crate/lib/.link-flags" ]; then
             cat $crate/lib/.link-flags
         fi
@@ -153,9 +152,6 @@ install_crate() {
         fi
     done
     popd
-
-    touch $out/lib/.link-flags
-    loadExternCrateLinkFlags $dependencies >> $out/lib/.link-flags
 
     if [ "$isProcMacro" ]; then
         pushd target/${buildMode}

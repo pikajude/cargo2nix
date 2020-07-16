@@ -31,33 +31,14 @@ with builtins; with lib;
 let
   inherit (rustLib) realHostTriple decideProfile;
 
-  wrapper = rustpkg: pkgs.writeScriptBin rustpkg ''
-    #!${stdenv.shell}
-    . ${./utils.sh}
-    isBuildScript=
-    args=("$@")
-    for i in "''${!args[@]}"; do
-      if [ "metadata=" = "''${args[$i]::9}" ]; then
-        args[$i]=metadata=$NIX_RUST_METADATA
-      elif [ "--crate-name" = "''${args[$i]}" ]; then
-        if [ "build_script_" = "''${args[$i+1]::13}" ]; then
-          isBuildScript=1
-        elif [ -n "$selfLib" -a "$crateName" = "''${args[$i+1]}" ]; then
-          echo >&2 "skipping library rebuild"
-          exit 0
-        fi
-      elif [[ -n "$selfLib" && "--extern" = "''${args[$i]}" && "''${args[$i+1]}" = "$crateName="* ]]; then
-        args[$(expr $i + 1)]="$crateName=$selfLib/lib$crateName.rlib"
-      fi
-    done
-    if [ "$isBuildScript" ]; then
-      args+=($NIX_RUST_BUILD_LINK_FLAGS)
-    else
-      args+=($NIX_RUST_LINK_FLAGS)
-    fi
-    touch invoke.log
-    echo "''${args[@]}" >>invoke.log
-    exec ${rustc}/bin/${rustpkg} "''${args[@]}"
+  wrapper = exename: pkgs.runCommandNoCC "${exename}-wrapper" {
+    inherit (stdenv) shell;
+    inherit exename rustc;
+    utils = ./utils.sh;
+  } ''
+    mkdir -p $out/bin
+    substituteAll ${./wrapper.sh} $out/bin/$exename
+    chmod +x $out/bin/$exename
   '';
 
   ccForBuild="${buildPackages.stdenv.cc}/bin/${buildPackages.stdenv.cc.targetPrefix}cc";
@@ -239,11 +220,10 @@ let
       buildLinkFlags=(`makeExternCrateFlags $buildDependencies`)
       linkExternCrateToDeps `realpath deps` $dependencies $devDependencies
       linkExternCrateToDeps `realpath build_deps` $buildDependencies
-      export crateName selfLib
 
       export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
       export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"
-      export crateName noRebuildHack
+      export crateName selfLib NIX_RUSTC_LINKER_HACK
       export RUSTC=${wrapper "rustc"}/bin/rustc
       export RUSTDOC=${wrapper "rustdoc"}/bin/rustdoc
 
@@ -259,15 +239,19 @@ let
     '';
 
     buildPhase = ''
+      runHook preBuild
       runHook overrideCargoManifest
       runHook setBuildEnv
       runHook runCargo
+      runHook postBuild
     '';
 
     installPhase = ''
+      runHook preInstall
       mkdir -p $out/lib
       cargo_links="$(remarshal -if toml -of json Cargo.original.toml | jq -r '.package.links | select(. != null)')"
       install_crate ${host-triple}
+      runHook postInstall
     '';
   };
 in

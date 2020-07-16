@@ -37,12 +37,17 @@ let
     isBuildScript=
     args=("$@")
     for i in "''${!args[@]}"; do
-      if [ "xmetadata=" = "x''${args[$i]::9}" ]; then
+      if [ "metadata=" = "''${args[$i]::9}" ]; then
         args[$i]=metadata=$NIX_RUST_METADATA
       elif [ "--crate-name" = "''${args[$i]}" ]; then
-        if [ "xbuild_script_" = "x''${args[$i+1]::13}" ]; then
+        if [ "build_script_" = "''${args[$i+1]::13}" ]; then
           isBuildScript=1
+        elif [ -n "$selfLib" -a "$crateName" = "''${args[$i+1]}" ]; then
+          echo >&2 "skipping library rebuild"
+          exit 0
         fi
+      elif [[ -n "$selfLib" && "--extern" = "''${args[$i]}" && "''${args[$i+1]}" = "$crateName="* ]]; then
+        args[$(expr $i + 1)]="$crateName=$selfLib/lib$crateName.rlib"
       fi
     done
     if [ "$isBuildScript" ]; then
@@ -99,6 +104,19 @@ let
         ])))
     runtimeDependencies buildtimeDependencies;
 
+  dependencyGraph = crate: builtins.listToAttrs (builtins.genericClosure {
+    startSet = makeKvs crate;
+    operator = crate: makeKvs crate.value;
+  });
+
+  makeKvs = parent: map (crate: rec {
+    key = "${crate.name}-${crate.version}";
+    name = key;
+    value = crate;
+  }) (builtins.attrValues (parent.dependencies // parent.devDependencies));
+
+  maybeSelfLib = (dependencyGraph { inherit dependencies devDependencies; })."${name}-${version}" or null;
+
   drvAttrs = {
     inherit NIX_DEBUG;
     name = "crate-${name}-${version}${optionalString (compileMode != "build") "-${compileMode}"}";
@@ -133,6 +151,10 @@ let
     dependencies = depMapToList dependencies;
     buildDependencies = depMapToList buildDependencies;
     devDependencies = depMapToList (optionalAttrs needDevDependencies devDependencies);
+
+    selfLib = if !needDevDependencies || maybeSelfLib == null
+      then null
+      else "${maybeSelfLib}/lib";
 
     extraRustcFlags =
       optionals (hostPlatformCpu != null) ([("-Ctarget-cpu=" + hostPlatformCpu)]) ++
@@ -215,9 +237,12 @@ let
       mkdir -p deps build_deps
       linkFlags=(`makeExternCrateFlags $dependencies $devDependencies`)
       buildLinkFlags=(`makeExternCrateFlags $buildDependencies`)
+      linkExternCrateToDeps `realpath deps` $dependencies $devDependencies
+      linkExternCrateToDeps `realpath build_deps` $buildDependencies
+      export crateName selfLib
 
-      export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} $extraRustcFlags"
-      export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} $extraRustcBuildFlags"
+      export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
+      export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"
       export crateName noRebuildHack
       export RUSTC=${wrapper "rustc"}/bin/rustc
       export RUSTDOC=${wrapper "rustdoc"}/bin/rustdoc

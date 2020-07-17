@@ -223,7 +223,7 @@ let
 
       export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
       export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"
-      export crateName selfLib NIX_RUSTC_LINKER_HACK
+      export crateName selfLib NIX_RUSTC_LINKER_HACK NIX_RUSTC_LINKER_HACK_ARGS
       export RUSTC=${wrapper "rustc"}/bin/rustc
       export RUSTDOC=${wrapper "rustdoc"}/bin/rustdoc
 

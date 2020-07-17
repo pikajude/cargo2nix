@@ -31,9 +31,8 @@ if [ "$exename" = rustc ]; then
   args+=("--remap-path-prefix" "$NIX_BUILD_TOP=/source")
 
   if echo "$NIX_RUSTC_LINKER_HACK" | grep -q "\\b$outputName\\b"; then
-    args+=("-Ctarget-feature=-crt-static" "-lstatic=stdc++")
+    args+=("$NIX_RUSTC_LINKER_HACK_ARGS")
   fi
 fi
-touch invoke.log
 echo "$exepath ${args[@]}" >>invoke.log
 exec "$exepath" "${args[@]}"

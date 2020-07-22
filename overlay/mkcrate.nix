@@ -31,15 +31,7 @@ with builtins; with lib;
 let
   inherit (rustLib) realHostTriple decideProfile;
 
-  wrapper = exename: pkgs.runCommandNoCC "${exename}-wrapper" {
-    inherit (stdenv) shell;
-    inherit exename rustc;
-    utils = ./utils.sh;
-  } ''
-    mkdir -p $out/bin
-    substituteAll ${./wrapper.sh} $out/bin/$exename
-    chmod +x $out/bin/$exename
-  '';
+  wrapper = exename: rustLib.wrapRustc { inherit rustc exename; };
 
   ccForBuild="${buildPackages.stdenv.cc}/bin/${buildPackages.stdenv.cc.targetPrefix}cc";
   cxxForBuild="${buildPackages.stdenv.cc}/bin/${buildPackages.stdenv.cc.targetPrefix}c++";
@@ -106,6 +98,9 @@ let
     buildInputs = runtimeDependencies;
     propagatedBuildInputs = lib.unique (concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
     nativeBuildInputs = [ cargo ] ++ buildtimeDependencies;
+
+    RUSTC = "${wrapper "rustc"}/bin/rustc";
+    RUSTDOC = "${wrapper "rustdoc"}/bin/rustdoc";
 
     depsBuildBuild =
       let inherit (buildPackages.buildPackages) stdenv jq remarshal;
@@ -224,8 +219,6 @@ let
       export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
       export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"
       export crateName selfLib NIX_RUSTC_LINKER_HACK NIX_RUSTC_LINKER_HACK_ARGS
-      export RUSTC=${wrapper "rustc"}/bin/rustc
-      export RUSTDOC=${wrapper "rustdoc"}/bin/rustdoc
 
       depKeys=(`loadDepKeys $dependencies`)
 

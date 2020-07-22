@@ -7,7 +7,9 @@ outputName=
 args=("$@")
 for i in "${!args[@]}"; do
   if [[ "${args[$i]}" = metadata=* ]]; then
-    args[$i]="metadata=$NIX_RUST_METADATA"
+    if [ -z "$IN_NIX_SHELL" ]; then
+      args[$i]="metadata=$NIX_RUST_METADATA"
+    fi
   elif [ "${args[$i]}" = "--crate-name" ]; then
     if [[ "${args[$i+1]}" = build_script_* ]]; then
       isBuildScript=1
@@ -31,7 +33,7 @@ if [ "$exename" = rustc ]; then
   args+=("--remap-path-prefix" "$NIX_BUILD_TOP=/source")
 
   if echo "$NIX_RUSTC_LINKER_HACK" | grep -q "\\b$outputName\\b"; then
-    args+=("$NIX_RUSTC_LINKER_HACK_ARGS")
+    args+=($NIX_RUSTC_LINKER_HACK_ARGS)
   fi
 fi
 echo "$exepath ${args[@]}" >>invoke.log

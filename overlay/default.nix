@@ -23,6 +23,8 @@ let
     overrides = callPackage ./overrides.nix { };
 
     runTests = callPackage ./run-tests.nix { };
+
+    wrapRustc = callPackage ./wrapper.nix { };
   };
 in
 {

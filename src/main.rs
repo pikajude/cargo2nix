@@ -20,7 +20,6 @@ use cargo_platform::Platform;
 use colorify::colorify;
 use failure::{Error, ResultExt};
 use semver::{Version, VersionReq};
-use sha2::{Digest, Sha256};
 use tera::Tera;
 
 use crate::{expr::BoolExpr, template::BuildPlan};
@@ -172,14 +171,6 @@ fn write_to_file(file: impl AsRef<Path>) -> Result<()> {
   Ok(())
 }
 
-fn hash_lockfile(w: &Workspace) -> Result<String> {
-  let path = w.root().join("Cargo.lock");
-  let mut sha256 = Sha256::new();
-  let mut file = fs::File::open(path)?;
-  io::copy(&mut file, &mut sha256)?;
-  Ok(format!("{:x}", sha256.result()))
-}
-
 fn generate_cargo_nix(mut out: impl io::Write) -> Result<()> {
   let config = {
     let mut config = cargo::Config::default()?;
@@ -189,7 +180,6 @@ fn generate_cargo_nix(mut out: impl io::Write) -> Result<()> {
 
   let root_manifest_path = find_root_manifest_for_wd(config.cwd())?;
   let ws = Workspace::new(&root_manifest_path, &config)?;
-  let lockfile_hash = hash_lockfile(&ws)?;
   let specs = Packages::All.to_package_id_specs(&ws)?;
   let resolve = resolve_ws_with_opts(&ws, ResolveOpts::everything(), &specs)?;
 
@@ -224,7 +214,6 @@ fn generate_cargo_nix(mut out: impl io::Write) -> Result<()> {
   let profiles = manifest::extract_profiles(&root_manifest);
 
   let plan = BuildPlan::from_items(
-    lockfile_hash,
     root_pkgs,
     profiles,
     rpkgs_by_id,

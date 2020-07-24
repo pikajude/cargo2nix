@@ -59,7 +59,7 @@ let
         else "--features ${concatStringsSep "," featuresWithoutDefault}";
     in
       ''
-        cargo build $CARGO_VERBOSE ${optionalString release "--release"} --target ${host-triple} ${buildMode} \
+        cargo build $CARGO_VERBOSE ${optionalString release "--release"} ${buildMode} \
           ${featuresArg} ${optionalString (!hasDefaultFeature) "--no-default-features"}
       '';
   needDevDependencies = compileMode == "test" || compileMode == "bench";
@@ -95,12 +95,14 @@ let
     name = "crate-${name}-${version}${optionalString (compileMode != "build") "-${compileMode}"}";
     inherit src version meta needDevDependencies;
     buildMode = if release then "release" else "debug";
-    buildInputs = runtimeDependencies;
     propagatedBuildInputs = lib.unique (concatMap (drv: drv.propagatedBuildInputs) runtimeDependencies);
     nativeBuildInputs = [ cargo ] ++ buildtimeDependencies;
 
     RUSTC = "${wrapper "rustc"}/bin/rustc";
     RUSTDOC = "${wrapper "rustdoc"}/bin/rustdoc";
+
+    # allows easier overriding of the cargo invocation (to run clippy and so on)
+    CARGO_BUILD_TARGET = host-triple;
 
     depsBuildBuild =
       let inherit (buildPackages.buildPackages) stdenv jq remarshal;

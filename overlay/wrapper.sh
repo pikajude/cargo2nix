@@ -4,6 +4,7 @@ exename=@exename@
 exepath="@rustc@/bin/$exename"
 isBuildScript=
 outputName=
+isTest=
 args=("$@")
 for i in "${!args[@]}"; do
   if [[ "${args[$i]}" = metadata=* ]]; then
@@ -19,6 +20,8 @@ for i in "${!args[@]}"; do
     else
       outputName="${args[$i+1]}"
     fi
+  elif [ "${args[$i]}" = "--test" -o "${args[$i]} ${args[$i+1]}" = "--cfg test" ]; then
+    isTest=1
   elif [[ -n "$selfLib" && "${args[$i]}" = "--extern" && "${args[$i+1]}" = "$crateName="* ]]; then
     args[$(expr $i + 1)]="$crateName=$selfLib/lib$crateName.rlib"
   fi
@@ -33,6 +36,8 @@ if [ "$exename" = rustc ]; then
   args+=("--remap-path-prefix" "$NIX_BUILD_TOP=/source")
 
   if echo "$NIX_RUSTC_LINKER_HACK" | grep -q "\\b$outputName\\b"; then
+    args+=($NIX_RUSTC_LINKER_HACK_ARGS)
+  elif [ -n "$isTest" ]; then
     args+=($NIX_RUSTC_LINKER_HACK_ARGS)
   fi
 fi

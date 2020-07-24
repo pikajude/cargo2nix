@@ -175,11 +175,6 @@ install_crate() {
         popd
     fi
 
-    if [ ! "$has_output" ]; then
-        echo NO OUTPUT IS FOUND
-        exit 1
-    fi
-
     if [ "$needs_deps" ]; then
         mkdir -p $out/lib/deps
         linkExternCrateToDeps $out/lib/deps $dependencies

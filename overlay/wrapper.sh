@@ -41,5 +41,7 @@ if [ "$exename" = rustc ]; then
     args+=($NIX_RUSTC_LINKER_HACK_ARGS)
   fi
 fi
-echo "$exepath ${args[@]}" >>invoke.log
+if (( NIX_DEBUG >= 1 )); then
+  echo >&2 "$exepath ${args[@]}"
+fi
 exec "$exepath" "${args[@]}"

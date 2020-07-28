@@ -41,4 +41,4 @@ fi
 if (( NIX_DEBUG >= 1 )); then
   echo >&2 "$exepath ${args[@]}"
 fi
-exec "$exepath" "${args[@]}"
+CARGO_MANIFEST_DIR=. exec "$exepath" "${args[@]}"

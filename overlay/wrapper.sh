@@ -14,15 +14,12 @@ for i in "${!args[@]}"; do
   elif [ "${args[$i]}" = "--crate-name" ]; then
     if [[ "${args[$i+1]}" = build_script_* ]]; then
       isBuildScript=1
-    elif [ -n "$selfLib" -a "${args[$i+1]}" = "$crateName" ]; then
-      echo >&2 "skipping library rebuild"
-      exit 0
     else
       outputName="${args[$i+1]}"
     fi
   elif [ "${args[$i]}" = "--test" -o "${args[$i]} ${args[$i+1]}" = "--cfg test" ]; then
     isTest=1
-  elif [[ -n "$selfLib" && "${args[$i]}" = "--extern" && "${args[$i+1]}" = "$crateName="* ]]; then
+  elif [[ -n "$selfLib" && -n "$isTest" && "${args[$i]}" = "--extern" && "${args[$i+1]}" = "$crateName="* ]]; then
     args[$(expr $i + 1)]="$crateName=$selfLib/lib$crateName.rlib"
   fi
 done

@@ -31,6 +31,10 @@ makeExternCrateFlags() {
         if [ -f "$crate/lib/.link-flags" ]; then
             cat $crate/lib/.link-flags
         fi
+        echo "-L" "$crate/lib"
+        if [ -d "$crate/lib/deps" ]; then
+            echo "-L" "$crate/lib/deps"
+        fi
     done
 }
 loadExternCrateLinkFlags() {
@@ -66,13 +70,9 @@ linkExternCrateToDeps() {
         else
             ln -sf $dep/lib/lib${crate_name}.rlib $deps_dir/lib${crate_name}-${metadata}.rlib
         fi
-        (
-            shopt -s nullglob
-            for subdep in $dep/lib/deps/*; do
-                local subdep_name=`basename $subdep`
-                ln -sf $subdep $deps_dir/$subdep_name
-            done
-        )
+        if [ -d $dep/lib/deps ]; then
+            ln -sf $dep/lib/deps/* $deps_dir
+        fi
     done
 }
 upper() {
@@ -175,7 +175,7 @@ install_crate() {
         popd
     fi
 
-    if [ "$needs_deps" ]; then
+    if [ "$needs_deps" -a "${#dependencies[@]}" -ne 0 ]; then
         mkdir -p $out/lib/deps
         linkExternCrateToDeps $out/lib/deps $dependencies
     fi

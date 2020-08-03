@@ -212,14 +212,11 @@ let
       export CARGO_VERBOSE=`cargoVerbosityLevel $NIX_DEBUG`
       export NIX_RUST_METADATA=`extractHash $out`
       export CARGO_HOME=`pwd`/.cargo
-      mkdir -p deps build_deps
       linkFlags=(`makeExternCrateFlags $dependencies $devDependencies`)
       buildLinkFlags=(`makeExternCrateFlags $buildDependencies`)
-      linkExternCrateToDeps `realpath deps` $dependencies $devDependencies
-      linkExternCrateToDeps `realpath build_deps` $buildDependencies
 
-      export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} -L dependency=$(realpath deps) $extraRustcFlags"
-      export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} -L dependency=$(realpath build_deps) $extraRustcBuildFlags"
+      export NIX_RUST_LINK_FLAGS="''${linkFlags[@]} $extraRustcFlags"
+      export NIX_RUST_BUILD_LINK_FLAGS="''${buildLinkFlags[@]} $extraRustcBuildFlags"
       export crateName selfLib NIX_RUSTC_LINKER_HACK NIX_RUSTC_LINKER_HACK_ARGS
 
       depKeys=(`loadDepKeys $dependencies`)

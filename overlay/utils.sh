@@ -100,7 +100,13 @@ dumpDepInfo() {
             warning)
             ;;
             rustc-link-search)
-                echo "-L" `printf '%q' $val` >>$link_flags
+                if [[ "$val" = *"$NIX_BUILD_TOP"* ]]; then
+                    if (( NIX_DEBUG >= 1 )); then
+                        echo >&2 "not propagating redundant linker arg '$val'"
+                    fi
+                else
+                    echo "-L" `printf '%q' $val` >>$link_flags
+                fi
                 ;;
             *)
                 if [ -e "$val" ]; then
@@ -194,7 +200,7 @@ cargoVerbosityLevel() {
 
   if (( level >= 1 )); then
     verbose_flag="-v"
-  elif (( level >= 7 )); then
+  elif (( level >= 2 )); then
     verbose_flag="-vv"
   fi
 

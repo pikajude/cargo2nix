@@ -104,6 +104,12 @@ let
     # allows easier overriding of the cargo invocation (to run clippy and so on)
     CARGO_BUILD_TARGET = host-triple;
 
+    # https://github.com/tpoechtrager/cctools-port/blob/43f32a4c61b5ba7fde011e816136c550b1b3146f/cctools/ld64/src/ld/Options.cpp#L4519
+    ZERO_AR_DATE = 1;
+
+    # uncomment to print linker invocation and output. useful for debugging
+    # RUSTC_LOG = "rustc_codegen_ssa::back::link=info";
+
     depsBuildBuild =
       let inherit (buildPackages.buildPackages) stdenv jq remarshal;
       in [ stdenv.cc jq remarshal ];

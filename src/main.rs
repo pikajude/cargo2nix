@@ -3,7 +3,7 @@
 use std::{
   collections::{BTreeMap, BTreeSet, HashMap},
   fs,
-  io::{self, BufRead, Write},
+  io::{self, BufRead},
   path::Path,
 };
 
@@ -142,18 +142,6 @@ fn write_to_file(file: impl AsRef<Path>) -> Result<()> {
       vers_req,
       ver
     );
-    print!(
-      "warning: do you want to overwrite '{}'? yes/no: ",
-      path.display()
-    );
-
-    io::stdout().flush()?;
-    let mut line = String::new();
-    io::stdin().read_line(&mut line)?;
-    if line.trim() != "yes" {
-      println!("aborted!");
-      return Ok(());
-    }
   }
 
   let mut temp_file = tempfile::Builder::new()

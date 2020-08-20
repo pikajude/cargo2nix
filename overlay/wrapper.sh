@@ -31,6 +31,7 @@ fi
 if [ "$exename" = rustc ]; then
   # not supported by rustdoc, which is called to run doctests
   args+=("--remap-path-prefix" "$NIX_BUILD_TOP=/source")
+  args+=("-C" "rpath")
 
   if echo "$NIX_RUSTC_LINKER_HACK" | grep -q "\\b$outputName\\b"; then
     args+=($NIX_RUSTC_LINKER_HACK_ARGS)

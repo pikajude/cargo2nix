@@ -114,11 +114,7 @@ let
       let inherit (buildPackages.buildPackages) stdenv jq remarshal;
       in [ stdenv.cc jq remarshal ];
 
-    # Running the default `strip -S` command on Darwin corrupts the
-    # .rlib files in "lib/".
-    #
-    # See https://github.com/NixOS/nixpkgs/pull/34227
-    stripDebugList = if stdenv.isDarwin then [ "bin" ] else null;
+    stripDebugList = [ "bin" ];
 
     passthru = {
       inherit
@@ -234,6 +230,8 @@ let
           echo $key
         done
       fi
+    '' + optionalString stdenv.isDarwin ''
+      export NIX_x86_64_apple_darwin_CFLAGS_COMPILE+=" -fdebug-prefix-map=$NIX_BUILD_TOP=/build"
     '';
 
     buildPhase = ''
@@ -250,6 +248,10 @@ let
       cargo_links="$(remarshal -if toml -of json Cargo.original.toml | jq -r '.package.links | select(. != null)')"
       install_crate ${host-triple}
       runHook postInstall
+    ''
+    # budget strip phase, since the default strip phase does not seem to be able to target specific file types
+    + optionalString stdenv.isDarwin ''
+      find $out/lib -name '*.dylib' -print0 | xargs -0 strip -S 2>/dev/null || true
     '';
   };
 in

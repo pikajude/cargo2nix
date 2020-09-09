@@ -121,9 +121,10 @@ dumpDepInfo() {
 
 install_crate() {
   local host_triple=$1
-  pushd target/${host_triple}/${buildMode}
   local needs_deps=
   local has_output=
+
+  pushd target/${host_triple}/${buildMode}
   for output in *; do
     if [ -d "$output" ]; then
       continue
@@ -186,6 +187,21 @@ install_crate() {
     linkExternCrateToDeps $out/lib/deps $dependencies
   fi
 
+  if [ -n "$needDevDependencies" ]; then
+    for file in target/${host_triple}/${buildMode}/deps/*; do
+      if grep -q __RUST_TEST_INVOKE "$file"; then
+        mkdir -p $out/bin
+        cp "$file" $out/bin
+        has_output=1
+      fi
+    done
+  fi
+
+  if [ -z "$has_output" ]; then
+      echo >&2 "no output found for crate"
+      exit 1
+  fi
+  
   echo {} | jq \
 '{name:$name, metadata:$metadata, version:$version, proc_macro:$procmacro}' \
 --arg name $crateName \
